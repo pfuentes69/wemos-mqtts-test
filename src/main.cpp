@@ -1,16 +1,76 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <time.h>
 
 const int buttonPin = D3;
 
-const char* ssid     = "Papillon"; // "WIFI-WISeKey";
+const char* ssid     = "Papillon_EXT"; // "WIFI-WISeKey";
 const char* password = "70445312"; // "75468471810334508893";
 
 int status = WL_IDLE_STATUS;   // the Wifi radio's status
 
 IPAddress broker(54, 194, 211, 75); // abxvtnyocolvw-ats.iot.eu-west-1.amazonaws.com
 const char* AWSEndpoint = "abxvtnyocolvw-ats.iot.eu-west-1.amazonaws.com";
+
+  static const char awsCA[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
+ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
+b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL
+MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv
+b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj
+ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM
+9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw
+IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6
+VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L
+93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm
+jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC
+AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA
+A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI
+U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs
+N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv
+o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
+5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy
+rqXRfboQnoZsG4q5WTP468SQvvG5
+-----END CERTIFICATE-----
+)EOF";
+
+const char* caChainPem = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIICvzCCAkagAwIBAgIUPiVqhLIMfCobXVTzSoy0WLGmELgwCgYIKoZIzj0EAwMw" \
+"PDEWMBQGA1UEAwwNREVWSU9UUk9PVENBMTEVMBMGA1UECgwMV0lTRUtFWSBERU1P" \
+"MQswCQYDVQQGEwJDSDAeFw0xOTExMDcxNTEzNTRaFw00NDEwMzExNTEwNDVaMDsx" \
+"FTATBgNVBAMMDERFVklPVFNVQkNBMTEVMBMGA1UECgwMV0lTRUtFWSBERU1PMQsw" \
+"CQYDVQQGEwJDSDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABO7AOjaGViGZrajy" \
+"mM85OvuYRLv34kzqPFMAZAExuh3z/529D1wQvTDU9MLPn7z9tAVxHIvNqzoeD9CT" \
+"qseS/HijggElMIIBITAPBgNVHRMBAf8EBTADAQH/MB8GA1UdIwQYMBaAFFJb74DA" \
+"gWeBV+jE85lisnbgcWqzMHgGCCsGAQUFBwEBBGwwajA/BggrBgEFBQcwAoYzaHR0" \
+"cDovL3B1YmxpYy53aXNla2V5ZGVtby5jb20vY3J0L2RldmlvdHJvb3RjYTEuY3J0" \
+"MCcGCCsGAQUFBzABhhtodHRwOi8vb2NzcC53aXNla2V5ZGVtby5jb20wRAYDVR0f" \
+"BD0wOzA5oDegNYYzaHR0cDovL3B1YmxpYy53aXNla2V5ZGVtby5jb20vY3JsL2Rl" \
+"dmlvdHJvb3RjYTEuY3JsMB0GA1UdDgQWBBRFsHa610dTUvxeiVjdbLOIN61yKzAO" \
+"BgNVHQ8BAf8EBAMCAYYwCgYIKoZIzj0EAwMDZwAwZAIwOEVSTb0kaMuK+H8EmzCO" \
+"mFN3kXEWJdhkmV7xfuTriyQjIbPrfOcoobIDiQykbfazAjAVRdJGi7K7ewEhLjd5" \
+"Lwo5iDYQ/gDuCjFzBxVwiShxYIuZ61q+vSEIw5IfWBds24k=\n" \
+"-----END CERTIFICATE-----\n" \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIICxTCCAkugAwIBAgIUazyBCqgHKRv0OpLrfOQ/7c86HlMwCgYIKoZIzj0EAwMw" \
+"PDEWMBQGA1UEAwwNREVWSU9UUk9PVENBMTEVMBMGA1UECgwMV0lTRUtFWSBERU1P" \
+"MQswCQYDVQQGEwJDSDAeFw0xOTExMDcxNTEwNDVaFw00NDEwMzExNTEwNDVaMDwx" \
+"FjAUBgNVBAMMDURFVklPVFJPT1RDQTExFTATBgNVBAoMDFdJU0VLRVkgREVNTzEL" \
+"MAkGA1UEBhMCQ0gwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAREv2MDEnAiUOpiz6JW" \
+"WCTrGxyxCXayGc3OEMxw8OaWQfm1BL6SzScrAI0y/mm+PgIC5hdF9OSh+N2RKGbV" \
+"yFKzEordka8e9RbD5FR7/GTRYjpETFxnQ3lrXp00dJe5JjujggEMMIIBCDAPBgNV" \
+"HRMBAf8EBTADAQH/MB8GA1UdIwQYMBaAFFJb74DAgWeBV+jE85lisnbgcWqzMIGk" \
+"BgNVHR8EgZwwgZkwgZagX6BdhltodHRwOi8vZGV2Y2EwMTo4MDgwL2VqYmNhL3B1" \
+"YmxpY3dlYi93ZWJkaXN0L2NlcnRkaXN0P2NtZD1jcmwmaXNzdWVyPUNOPVRlc3RD" \
+"QSxPPUFuYVRvbSxDPVNFojOkMTAvMQ8wDQYDVQQDDAZUZXN0Q0ExDzANBgNVBAoM" \
+"BkFuYVRvbTELMAkGA1UEBhMCU0UwHQYDVR0OBBYEFFJb74DAgWeBV+jE85lisnbg" \
+"cWqzMA4GA1UdDwEB/wQEAwIBhjAKBggqhkjOPQQDAwNoADBlAjEAlBO/4qVbw7ig" \
+"xac8KQDtp/rlFoatNL9kBnz1dvYd8vmBpZXzvOjK1ug53s+v73oKAjBITjjB1w2x" \
+"QWzzor4c6LGVYlN59XojL//NBQAj5jOXtP9nW/fdbbM7Nafq9CZkoXY=\n" \
+"-----END CERTIFICATE-----\n";
 
 const char*  certificatePemCrtRSA = \
 "-----BEGIN CERTIFICATE-----\n" \
@@ -95,6 +155,7 @@ const char* devID = "testpf-awsca-dev01";
 
 const char* devTopic = "PapillonIoT/TestSensor/+";
 
+const char* caFile = "/ca.pem";
 const char* certFile = "/cert.pem";
 const char* keyFile = "/private.key";
 
@@ -149,48 +210,58 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println("Command: " + sCommand);
 }
 
+void createFile(char* data, char* path) {
+  // create certificate file
+  File f = SPIFFS.open(path, "w");
+  if (!f) {
+    Serial.print("File '");
+    Serial.print(path);
+    Serial.println("' open failed.");
+  } else {
+    f.print(data);
+    f.close();
+  }
+}
 
 void createTLSFiles() {
-  Serial.println(__FUNCTION__);
   // create certificate file
-  File fc = SPIFFS.open(certFile, "w");
-  if (!fc)
-    Serial.println("File '/cert.pem' open failed.");
-  else {
-    fc.print(certificatePemCrtRSA);
-    fc.close();
-  }
-
+  createFile((char *)certificatePemCrtRSA, (char *)certFile);
   // create key file
-  File fk = SPIFFS.open(keyFile, "w");
-  if (!fk)
-    Serial.println("File '/private.key' open failed.");
-  else {
-    fk.print(privatePemKeyRSA);
-    fk.close();
-  }
+  createFile((char *)privatePemKeyRSA, (char *)keyFile);
+  // create key file
+  createFile((char *)caChainPem, (char *)caFile);
 }
 
 
-void printTLSFiles() {
-  File fc = SPIFFS.open("/cert.pem", "r");
-  if (!fc)
-    Serial.println("File 'cert.pem' open failed.");
-  else {
-    while (fc.available())
-      Serial.write(fc.read());
-    fc.close();
-  }
-  File fk = SPIFFS.open("/private.key", "r");
-  if (!fk)
-    Serial.println("File 'private.key' open failed.");
-  else {
-    while (fk.available())
-      Serial.write(fk.read());
-    fk.close();
+void printFile(char* path) {
+  File f = SPIFFS.open(path, "r");
+  if (!f) {
+    Serial.print("File '");
+    Serial.print(path);
+    Serial.println("' open failed.");
+  } else {
+    while (f.available())
+      Serial.write(f.read());
+    f.close();
   }
 }
 
+// Set time via NTP, as required for x.509 validation
+void setClock() {
+  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.print("Waiting for NTP time sync: ");
+  time_t now = time(nullptr);
+  while (now < 8 * 3600 * 2) {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+  }
+  Serial.println("");
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  Serial.print("Current time: ");
+  Serial.println(asctime(&timeinfo));
+}
 
 void setup() {
   // initialize serial for debugging
@@ -210,6 +281,9 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
+  // Set time
+  setClock();
+
   //connect to MQTT server
   client.setServer(AWSEndpoint, 8883);
   client.setCallback(callback);
@@ -220,11 +294,20 @@ void setup() {
   else
     createTLSFiles();
 
-//  printTLSFiles();
+//  printFile((char *)caFile);
 
   // Allows for 'insecure' TLS connections. Of course this is totally insecure,
   // but seems the only way to connect to IoT. So be cautious with your data.
   WIFIclient.setInsecure();
+
+  // Proper SSL Validation tests... not working for now
+//  BearSSL::X509List certCA(awsCA);
+//  WIFIclient.setTrustAnchors(&certCA);
+
+  // Read the CA chain from the spiffs filesystem and load it.
+  File caChain = SPIFFS.open(caFile, "r");
+  if (!caChain) Serial.println("Failed to open CA file: " + String(caFile));
+  if(WIFIclient.loadCACert(caChain)) Serial.println("CA loaded!");
   // Read the SSL certificate from the spiffs filesystem and load it.
   File cert = SPIFFS.open(certFile, "r");
   if (!cert) Serial.println("Failed to open certificate file: " + String(certFile));
