@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
 #include <PubSubClient.h>
 #include "DHTesp.h"
 #include <SPI.h>
@@ -95,6 +96,8 @@ const char* devTopic = "PapillonIoT/TestSensor/+";
 unsigned int counter = 0;
 unsigned long lastPublished = 0;
 
+// Multi AP Wifi utility class
+ESP8266WiFiMulti wifiMulti;
 // Initialize the Ethernet client object
 WiFiClientSecure WIFIclient;
 //PubSubClient client(AWSEndpoint, 8883, callback, espClient);
@@ -163,19 +166,26 @@ void setup() {
   // initialize serial for debugging
   Serial.begin(115200);
 
-  // initialize WiFi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+  wifiMulti.addAP("Papillon", "70445312");
+  wifiMulti.addAP("Papillon_EXT", "70445312");
+  wifiMulti.addAP("InsecureWifi", "");
 
-  Serial.println("");
-  Serial.println("WiFi connected");  
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+	Serial.println("Connecting Wifi...");
+  while(wifiMulti.run() != WL_CONNECTED) {
+      Serial.print(".");
+      delay(1000);
+  }
+  Serial.println();
+  if(wifiMulti.run() != WL_CONNECTED) {
+    Serial.println("WiFi not connected!");
+    delay(1000);
+  } else {
+      Serial.println("WiFi connected");
+      Serial.print("AP : ");
+      Serial.println(WiFi.SSID());
+      Serial.print("IP address : ");
+      Serial.println(WiFi.localIP());
+  }
 
   // Set time
   setClock();
