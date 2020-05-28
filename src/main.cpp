@@ -13,6 +13,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 
 DHTesp dht;
 long dhtInterval;
+long pubInterval = 15000;
 
 const int buttonPin = D3;
 
@@ -90,7 +91,7 @@ const char* devID = "dev01";
 // const char* devUS = "dev01";
 // const char* devPW = "dev01";
 
-const char* devTopic = "PapillonIoT/TestSensor/+";
+const char* devTopic = "PapillonIoT/TestSensor/command";
 
 // The following two variables are used for the example outTopic messages.
 unsigned int counter = 0;
@@ -215,6 +216,8 @@ void setup() {
 
 float humidity, newHumidity, temperature, newTemperature;
 unsigned long previousMillis = 0;        // will store last time LED was updated
+unsigned long lastPublish = 0;
+String payload;
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -225,39 +228,53 @@ void loop() {
     int reading = digitalRead(buttonPin);
     if (reading == LOW) {
       Serial.println("PUSH!");
-
-      String payload = "{\"temperature\":" + String(temperature) + ", \"humidity\":" + String(humidity) + "}";
-
+      payload = "{\"action\": \"PUSH!\"}";
+      display.setCursor(0,20);
       client.publish("PapillonIoT/TestSensor/data", (char*) payload.c_str());
-
-      digitalWrite(LED_BUILTIN, LOW);
+      display.print("PUSH!");
+      display.display();
       delay(100);
-      digitalWrite(LED_BUILTIN, HIGH);
+      display.setCursor(0,20);
+      display.print("        ");
+      display.display();
     }
     // Update DHT and display
     unsigned long currentMillis = millis();
     if (currentMillis - previousMillis >= dhtInterval) {
-      // save the last time you blinked the LED
+      // save the last time the DHT11 was read
       previousMillis = currentMillis;
-
       newHumidity = dht.getHumidity();
       newTemperature = dht.getTemperature() * 0.9;
-
-      if ((newTemperature != temperature) || (newHumidity != humidity)) {
-        humidity = newHumidity;
-        temperature = newTemperature;
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setTextColor(WHITE);
-        display.setCursor(0,0);
-        display.print("T = ");
-        display.print(temperature,0);
-        display.println(" C");
-        display.setCursor(0,10);
-        display.print("H = ");
-        display.print(humidity,0);
-        display.println(" %");
-        display.display();
+      if (newHumidity > 0) {
+        if ((newTemperature != temperature) || (newHumidity != humidity)) {
+          humidity = newHumidity;
+          temperature = newTemperature;
+          display.clearDisplay();
+          display.setTextSize(1);
+          display.setTextColor(WHITE);
+          display.setCursor(0,0);
+          display.print("T = ");
+          display.print(temperature,0);
+          display.println(" C");
+          display.setCursor(0,10);
+          display.print("H = ");
+          display.print(humidity,0);
+          display.println(" %");
+          display.display();
+        }
+        if (currentMillis - lastPublish >= pubInterval) {
+          // save the last the publish was done
+          lastPublish = currentMillis;
+          payload = "{\"temperature\":" + String(newTemperature) + ", \"humidity\":" + String(newHumidity) + "}";
+          display.setCursor(0,20);
+          client.publish("PapillonIoT/TestSensor/data", (char*) payload.c_str());
+          display.print("PUBLISH!");
+          display.display();
+          delay(100);
+          display.setCursor(0,20);
+          display.print("        ");
+          display.display();
+        }
       }
     }
   }
